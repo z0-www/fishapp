@@ -1,0 +1,25 @@
+DeepSeek 开放平台截图来自 powerycy 的公开教程
+https://github.com/shengjidaguai-china/goutoujunshi-jev-chat/blob/12ee1d6582a9270bd44b71a519d21f387542e8e0/documentation/guides/android-deepseek/README.md
+
+取自教程中的 08、09、10 图。鱼者文游仅打包已裁剪、遮挡敏感区域和标注的 PNG。更新教程时可单独替换同名 PNG，复核按钮名称及图片中的账户和密钥信息。
+
+MIT License
+Copyright (c) 2026 powerycy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
