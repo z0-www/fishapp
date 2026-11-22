@@ -30,8 +30,11 @@
 ## 下载
 
 - **主程序 APK / 历史版本**：见 [GitHub Releases](https://github.com/z0-www/fishapp/releases)。
-- **转换器 V1.2.1**：见本仓库 Releases 中的 `鱼者文游-转换器-v1.2.1-GitHub发布版.zip`；
-  网盘用户可使用单独的“夸克网盘版”（仅 APK + 说明）。
+- **转换器 V1.2.1**：
+  - [直接下载 APK](https://github.com/z0-www/fishapp/releases/download/converter-v1.2.1/fish-converter-v1.2.1-android.apk)
+  - [GitHub 详细发布包](https://github.com/z0-www/fishapp/releases/download/converter-v1.2.1/fish-converter-v1.2.1-github-release.zip)
+  - [Release 说明](https://github.com/z0-www/fishapp/releases/tag/converter-v1.2.1)
+  - 网盘用户可使用单独的“夸克网盘版”（仅 APK + 说明）。
 - **PWA** 不需要下载安装包，直接打开上面的线上地址，按浏览器提示添加到主屏幕。
 
 > PWA 不发布到网盘。网盘版只放 Android 转换器 APK 和安装说明。
