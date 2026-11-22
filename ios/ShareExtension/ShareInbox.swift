@@ -3,17 +3,51 @@ import Foundation
 enum IntakeError: Error { case invalid }
 enum ShareInbox {
     static let group = "group.com.yuzhe.fishtextadventure"
+
+    /// Staging root shared by the app and its share extension.
+    ///
+    /// A real App Group is used when the provisioning profile grants one. With
+    /// a free personal team (e.g. Sideloadly) the App Group is stripped, so the
+    /// app falls back to its own Application Support directory: importing from
+    /// the Files picker keeps working, while the system share extension cannot
+    /// hand off files and reports a clear failure instead.
     static func root() throws -> URL {
-        guard let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:group) else { throw IntakeError.invalid }
-        var dir = base.appendingPathComponent("share_inbox", isDirectory:true)
-        try FileManager.default.createDirectory(at:dir, withIntermediateDirectories:true)
-        var values = URLResourceValues(); values.isExcludedFromBackup = true
-        try dir.setResourceValues(values)
+        if let base = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: group
+        ) {
+            return try prepare(base.appendingPathComponent("share_inbox", isDirectory: true))
+        }
+        guard Bundle.main.bundleURL.pathExtension != "appex" else {
+            throw IntakeError.invalid
+        }
+        guard let support = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            throw IntakeError.invalid
+        }
+        return try prepare(support.appendingPathComponent("share_inbox", isDirectory: true))
+    }
+
+    private static func prepare(_ dir: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        // File protection is best effort; a missing passcode must not block import.
+        try? dir.setResourceValues(values)
         return dir.resolvingSymlinksInPath()
     }
     static func write(_ data: [String:Any], directory: URL) throws {
         let bytes = try JSONSerialization.data(withJSONObject:data)
-        try bytes.write(to:directory.appendingPathComponent("ready.json"), options:[.atomic, .completeFileProtection])
+        let url = directory.appendingPathComponent("ready.json")
+        do {
+            try bytes.write(to: url, options: [.atomic, .completeFileProtection])
+        } catch {
+            // A device without a passcode cannot apply complete protection.
+            // The staged copy is still app-sandboxed; fall back to atomic write
+            // instead of failing the whole import.
+            try bytes.write(to: url, options: .atomic)
+        }
     }
     static func pending() throws -> [[String:Any]] {
         var items = [[String:Any]]()
@@ -64,7 +98,8 @@ enum ShareInbox {
                 }
             }
         }
-        try FileManager.default.setAttributes([.protectionKey:FileProtectionType.complete],ofItemAtPath:to.path)
+        // Best effort: an unprotected device cannot apply complete protection.
+        try? FileManager.default.setAttributes([.protectionKey:FileProtectionType.complete],ofItemAtPath:to.path)
         return count
     }
 }

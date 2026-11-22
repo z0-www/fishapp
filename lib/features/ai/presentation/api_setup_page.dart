@@ -1,10 +1,12 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/security/api_key_storage.dart';
+import '../../../platform/web/web_storage_guard.dart';
 import '../../../shared/widgets/content_frame.dart';
 import '../application/ai_providers.dart';
 import 'api_key_guide_page.dart';
@@ -71,7 +73,11 @@ class _ApiSetupPageState extends ConsumerState<ApiSetupPage>
       }
     } catch (_) {}
     if (mounted) {
-      setState(() => message = '请在手机浏览器打开 platform.deepseek.com/api_keys。');
+      setState(
+        () => message = kIsWeb
+            ? '请在浏览器新标签页打开 platform.deepseek.com/api_keys。'
+            : '请在手机浏览器打开 platform.deepseek.com/api_keys。',
+      );
     }
   }
 
@@ -107,8 +113,12 @@ class _ApiSetupPageState extends ConsumerState<ApiSetupPage>
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialog) => AlertDialog(
-          title: const Text('保存到本机安全存储？'),
-          content: const Text('保存后可在 AI 服务设置中查看连接状态。'),
+          title: Text(kIsWeb ? '保存到浏览器加密存储？' : '保存到本机安全存储？'),
+          content: Text(
+            kIsWeb
+                ? '网页版用浏览器 WebCrypto 加密后保存在本站点存储中，不会上传到鱼者服务器。清除网站数据会同时删除密钥。请勿在公共电脑上保存。'
+                : '保存后可在 AI 服务设置中查看连接状态。',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialog, false),
@@ -209,6 +219,14 @@ class _ApiSetupPageState extends ConsumerState<ApiSetupPage>
               const SizedBox(height: 12),
               if (!config.permitsDirectCalls)
                 const Text('当前版本暂时无法测试 AI 连接。你仍可使用本地世界和故事档案。'),
+              if (kIsWeb && !isSecureBrowserContext)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    '当前页面不是 HTTPS 或 localhost，浏览器会拒绝加密存储。请改用 HTTPS 地址再保存密钥。',
+                    style: TextStyle(color: Color(0xFFB3261E), fontSize: 13),
+                  ),
+                ),
               const SizedBox(height: 20),
               if (saved && !widget.replacing) ...[
                 const ListTile(
@@ -269,9 +287,11 @@ class _ApiSetupPageState extends ConsumerState<ApiSetupPage>
                   child: Text(message!),
                 ),
               const SizedBox(height: 16),
-              const Text(
-                '密钥仅保存在设备安全存储中。',
-                style: TextStyle(fontSize: 13, color: Color(0xFF858A93)),
+              Text(
+                kIsWeb
+                    ? '密钥保存在浏览器加密存储中，只发送给 api.deepseek.com。'
+                    : '密钥仅保存在设备安全存储中。',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF858A93)),
               ),
               const ExpansionTile(
                 tilePadding: EdgeInsets.zero,

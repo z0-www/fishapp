@@ -1,0 +1,85 @@
+鱼者文游 · 离线对话转换器 V1.2.1 · 测试报告
+====================================================
+
+测试日期：2026-11-22
+范围：文件选择 → 解析 → .yuzhe → 主 App 真实 StoryBackup 恢复
+环境：Windows 11 / Flutter 3.50 / Dart 3.14；Android 模拟器 Medium Phone API 37
+
+1. 版本与签名
+--------------
+- 包名：com.yuzhe.converter
+- versionCode：13
+- versionName：1.2.1
+- APK：1,181,731 字节
+- SHA-256：BE42098D295205F95585094927DC64ADF1628769E09FA3BF9898F488DE99B132
+- release 签名，非 debug
+- 证书 SHA-256：d1d0130c90a64dbb6e4f4ec6c0776a50762f2db5b66b0aa03ab5501778623893
+- 无 INTERNET / READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE / MANAGE_EXTERNAL_STORAGE
+
+V1.2.0 原始 APK 未覆盖：
+- backups/converter-v1.2.0/鱼者文游-离线对话转换器-v1.2.0-原始.apk
+- SHA-256 8CC7990A25A31E4D520AAB89FC7581DF0D3D8D9C28F787DE0A68123618FEFCF7
+
+2. 修复
+-------
+- 归档 customFields/derived_json 版本：1.1.0 → 1.2.1（.yuzhe 容器版本仍为 1）
+- Service Worker 缓存：fish-converter-v1.2.1-mobile
+- 页脚：V1.2.1
+- created_at/saved_at 由毫秒改为 Unix 秒，修复恢复后 57974 年
+- timeline 恢复 ID 加可排序 ordinal 前缀，修复源顺序被打乱
+- 多选会话新增“合并为一个 .yuzhe”，主 App 可一次导入多个世界
+- Windows ZIP 使用前斜杠目录，避免 Cloudflare /canvaskit 等 404
+- APK 构建先写 ASCII 临时签名文件，再生成交付 APK
+
+3. 自动化测试
+-------------
+新增 test/converter_v121_compat_test.dart：13 passed / 0 failed
+主 App 全量：322 passed / 0 failed
+flutter analyze：No issues found
+
+覆盖：
+- 100 条、1000 条消息
+- 中文/特殊字符/换行
+- 空正文/缺失正文
+- TXT、Markdown、Chatbox JSON/ZIP（既有测试）
+- 多会话 ZIP（每个 .yuzhe 独立恢复）
+- 合并 .yuzhe（3 个世界、6 条消息一次恢复）
+- AES-256-GCM（错误密码失败、正确密码恢复）
+- 重复导入被拒绝
+- 预览后损坏回滚
+- 损坏 JSON/ZIP/UTF-8/33 MiB 超限
+- V1.2.1 元数据
+- APK 实际生成归档在主 App 真实恢复
+
+4. APK 实际流程（模拟器）
+--------------------------
+选择 01-chatbox-single.json → 1 个会话、5 条消息 → 生成
+雨夜茶馆 · 测试.yuzhe（12,377 字节）→ Android 系统保存成功。
+将该 APK 生成的 .yuzhe 交给主 App 真实 StoryBackup：
+- 5 条消息、角色顺序正确
+- converter 版本 1.2.1
+- EventTimeline 5 条
+- 日期为正常 2026 年
+
+5. 哈希与构建
+--------------
+APK：
+dist/android/鱼者文游-离线对话转换器-v1.2.1-安卓版.apk
+SHA-256 BE42098D295205F95585094927DC64ADF1628769E09FA3BF9898F488DE99B132
+
+Web/PWA：
+dist/converter/FishTextAdventure-Converter-1.2.1-mobile-cloudflare-pages.zip
+SHA-256 EAA0ABED9E859BDDC803D1766F889666A4C2F090489B8ABDED950ACF1D03282C
+
+6. 未验证
+----------
+- 真实 Chatbox 用户导出（只用官方合成夹具/合成文件）
+- 真实 Android 手机（本次为模拟器）
+- 主 App 官方正式签名 APK 的端到端导入（恢复逻辑使用真实代码测试）
+- 图片/附件/工具参数不写入 .yuzhe（明确限制）
+- 多会话 ZIP 本身不是主 App 可直读格式；请用“合并为一个 .yuzhe”或分别导入
+
+7. 结论
+--------
+代码、APK 构建和主 App 真实恢复测试达到 V1.2.1 发布条件。
+真实 Chatbox 用户样本/真机仍需验收，不能宣称所有 Chatbox 版本兼容。

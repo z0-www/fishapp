@@ -1,0 +1,45 @@
+{
+  "sessions": [
+    {
+      "id": "warn",
+      "name": "附件与工具调用测试",
+      "messages": [
+        {
+          "role": "user",
+          "content": "请看这张图和这段文字。"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "我能看到文字部分。"
+            },
+            {
+              "type": "image",
+              "image_url": "data:image/png;base64,AAAA"
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": "",
+          "tool_calls": [
+            {
+              "id": "t1",
+              "type": "function",
+              "function": {
+                "name": "lookup",
+                "arguments": "{}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "工具调用参数未转换，但正文继续。"
+        }
+      ]
+    }
+  ]
+}

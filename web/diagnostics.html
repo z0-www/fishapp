@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#3176C6">
+  <title>鱼者文游 · 启动诊断</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+      background: #f7f9fc;
+      color: #1f2937;
+      font: 14px/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", sans-serif;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; color: #245a9a; }
+    .sub { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
+    .card { background: #fff; border: 1px solid #e5eaf2; border-radius: 12px; padding: 12px; margin: 10px 0; }
+    .row { display: flex; gap: 10px; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #eef2f7; }
+    .row:last-child { border-bottom: 0; }
+    .k { color: #6b7280; flex: 0 0 42%; overflow-wrap: anywhere; }
+    .v { text-align: right; overflow-wrap: anywhere; }
+    .ok { color: #137a3a; font-weight: 600; }
+    .bad { color: #b3261e; font-weight: 600; }
+    .warn { color: #8a5a00; font-weight: 600; }
+    button, a.btn {
+      appearance: none; display: inline-flex; align-items: center; justify-content: center;
+      min-height: 42px; padding: 9px 14px; margin: 4px 6px 4px 0;
+      border: 1px solid #c9d7e8; border-radius: 10px; background: #fff;
+      color: #245a9a; font: inherit; text-decoration: none; cursor: pointer;
+    }
+    pre {
+      white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0;
+      padding: 10px; border-radius: 8px; background: #f3f6fa; font: 11px/1.5 ui-monospace, monospace;
+    }
+    .hint { color: #6b7280; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>启动诊断</h1>
+  <div class="sub">只检查本机资源，不读取 API Key、聊天内容或世界正文。</div>
+
+  <div class="card">
+    <div class="row"><span class="k">页面地址</span><span class="v" id="url">-</span></div>
+    <div class="row"><span class="k">HTTPS / 安全上下文</span><span class="v" id="secure">-</span></div>
+    <div class="row"><span class="k">浏览器</span><span class="v" id="ua">-</span></div>
+    <div class="row"><span class="k">显示模式</span><span class="v" id="display">-</span></div>
+    <div class="row"><span class="k">上次启动阶段</span><span class="v" id="trace">-</span></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><span class="k">图标 Icon-192.png</span><span class="v" id="icon">检查中…</span></div>
+    <div class="row"><span class="k">main.dart.js</span><span class="v" id="mainjs">检查中…</span></div>
+    <div class="row"><span class="k">sqlite3.wasm</span><span class="v" id="wasm">检查中…</span></div>
+    <div class="row"><span class="k">drift_worker.js</span><span class="v" id="worker">检查中…</span></div>
+    <div class="row"><span class="k">manifest.json</span><span class="v" id="manifest">检查中…</span></div>
+    <div class="row"><span class="k">Service Worker</span><span class="v" id="sw">检查中…</span></div>
+    <div class="row"><span class="k">Cache Storage</span><span class="v" id="caches">检查中…</span></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><span class="k">IndexedDB</span><span class="v" id="idb">检查中…</span></div>
+    <div class="row"><span class="k">OPFS</span><span class="v" id="opfs">检查中…</span></div>
+    <div class="row"><span class="k">WebCrypto</span><span class="v" id="crypto">检查中…</span></div>
+    <div class="row"><span class="k">持久化存储授权</span><span class="v" id="persist">检查中…</span></div>
+  </div>
+
+  <div class="card">
+    <button type="button" id="copy">复制诊断</button>
+    <button type="button" id="reload">重新加载主程序</button>
+    <a class="btn" href="./">返回主程序</a>
+    <div class="hint">如果这里显示资源 404、MIME 错误或 OPFS 失败，请把本页纯文本诊断发给开发者；不要附 Key 或聊天截图。</div>
+  </div>
+
+  <pre id="report">正在检查…</pre>
+
+  <script>
+    (function () {
+      var report = {};
+      var checks = [];
+      var text = document.getElementById('report');
+
+      function set(id, value, cls) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value;
+        el.className = 'v' + (cls ? ' ' + cls : '');
+        report[id] = value;
+      }
+      function result(name, ok, value) {
+        checks.push({ name: name, ok: ok, value: value });
+        set(name, value, ok === true ? 'ok' : ok === false ? 'bad' : 'warn');
+      }
+      function render() {
+        text.textContent = checks.map(function (c) {
+          return (c.ok === true ? '[OK] ' : c.ok === false ? '[FAIL] ' : '[INFO] ') +
+            c.name + ': ' + c.value;
+        }).join('\n') + '\n\n' + JSON.stringify(report, null, 2);
+      }
+
+      set('url', location.href);
+      set('secure', window.isSecureContext ? '是' : '否', window.isSecureContext ? 'ok' : 'bad');
+      set('ua', navigator.userAgent);
+      set('display', matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser');
+
+      var trace = '无';
+      try {
+        var parsed = JSON.parse(sessionStorage.getItem('fish_boot_trace_v1') || '[]');
+        trace = parsed.map(function (s) { return s.atMs + 'ms ' + s.name; }).join(' → ') || '无';
+      } catch (_) {}
+      set('trace', trace);
+
+      async function checkAsset(id, path, expectedType) {
+        try {
+          var response = await fetch(path + '?diag=' + Date.now(), { cache: 'no-store' });
+          var type = response.headers.get('content-type') || '';
+          var size = '';
+          try { size = (await response.arrayBuffer()).byteLength + ' B'; } catch (_) {}
+          var ok = response.ok && (!expectedType || type.indexOf(expectedType) >= 0);
+          result(id, ok, 'HTTP ' + response.status + ' · ' + type + (size ? ' · ' + size : ''));
+        } catch (error) {
+          result(id, false, '请求失败: ' + (error && error.message ? error.message : error));
+        }
+      }
+
+      async function run() {
+        await checkAsset('icon', 'icons/Icon-192.png', 'image/png');
+        await checkAsset('mainjs', 'main.dart.js', 'javascript');
+        await checkAsset('wasm', 'sqlite3.wasm', 'application/wasm');
+        await checkAsset('worker', 'drift_worker.js', 'javascript');
+        await checkAsset('manifest', 'manifest.json', 'json');
+
+        if ('serviceWorker' in navigator) {
+          try {
+            var reg = await navigator.serviceWorker.getRegistration();
+            result('sw', reg ? true : null, reg ? '已注册 · scope ' + reg.scope : '未注册');
+          } catch (e) { result('sw', null, String(e)); }
+        } else result('sw', false, '浏览器不支持');
+
+        if (window.caches) {
+          try {
+            var keys = await caches.keys();
+            result('caches', keys.length > 0 ? true : null, keys.join(', ') || '空');
+          } catch (e) { result('caches', null, String(e)); }
+        } else result('caches', null, '不支持 Cache Storage');
+
+        if ('indexedDB' in window) {
+          try {
+            var request = indexedDB.open('_fish_diag_' + Date.now());
+            var db = await new Promise(function (resolve, reject) {
+              request.onerror = function () { reject(request.error); };
+              request.onsuccess = function () { resolve(request.result); };
+              setTimeout(function () { reject(new Error('IndexedDB 打开超时')); }, 4000);
+            });
+            db.close();
+            result('idb', true, '可打开');
+          } catch (e) { result('idb', false, String(e)); }
+        } else result('idb', false, '不支持');
+
+        if (navigator.storage && navigator.storage.getDirectory) {
+          try {
+            var root = await navigator.storage.getDirectory();
+            var name = '_fish_diag_' + Date.now();
+            await root.getFileHandle(name, { create: true });
+            await root.removeEntry(name);
+            result('opfs', true, '可创建/删除测试文件（worker 同步句柄未测）');
+          } catch (e) {
+            result('opfs', null, 'OPFS 测试失败，应用会使用 IndexedDB: ' + e);
+          }
+        } else result('opfs', null, 'Safari 旧版/不支持；应用会使用 IndexedDB');
+
+        result('crypto', !!(window.crypto && crypto.subtle), crypto && crypto.subtle ? '可用' : '不可用');
+        if (navigator.storage && navigator.storage.persisted) {
+          try { result('persist', null, await navigator.storage.persisted() ? '已授权' : '未授权'); }
+          catch (e) { result('persist', null, String(e)); }
+        } else result('persist', null, '不支持');
+
+        render();
+      }
+
+      document.getElementById('copy').addEventListener('click', async function () {
+        try { await navigator.clipboard.writeText(text.textContent); this.textContent = '已复制'; }
+        catch (_) {
+          var area = document.createElement('textarea');
+          area.value = text.textContent; document.body.appendChild(area);
+          area.select(); document.execCommand('copy'); area.remove();
+          this.textContent = '已复制';
+        }
+      });
+      document.getElementById('reload').addEventListener('click', function () {
+        location.href = './';
+      });
+
+      run().catch(function (e) {
+        result('run', false, String(e));
+        render();
+      });
+    })();
+  </script>
+</body>
+</html>

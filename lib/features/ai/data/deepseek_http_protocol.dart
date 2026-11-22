@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 
 import 'deepseek_error_handler.dart';
 import 'deepseek_models.dart';
+import 'web_sse_stream.dart';
 
 /// Protocol only: no Flutter, credential persistence, logging or retries.
 /// App code must use the policy-guarded DeepSeekApiClient, never this directly.
@@ -245,6 +246,21 @@ class DeepSeekHttpProtocol implements DeepSeekTransport {
   }) async* {
     _key(key);
     try {
+      if (webSseAvailable) {
+        // Browser: fetch + ReadableStream keeps real incremental streaming.
+        yield* decodeSse(
+          webSseBytes(
+            key: key,
+            model: model,
+            messages: messages,
+            maxOutput: maxOutput,
+            thinking: thinking,
+            cancelToken: cancelToken,
+            onResponseStatus: onResponseStatus,
+          ),
+        );
+        return;
+      }
       final response = await _dio.post<ResponseBody>(
         '/chat/completions',
         data: {

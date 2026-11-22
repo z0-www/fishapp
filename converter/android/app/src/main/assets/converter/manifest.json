@@ -1,0 +1,20 @@
+{
+  "name": "鱼者文游 · 离线对话转换器",
+  "short_name": "鱼者转换器",
+  "description": "手机端把 Chatbox 等导出的对话转换为鱼者文游可恢复的 .yuzhe 归档；全部在本地完成。",
+  "lang": "zh-CN",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#F6F8FC",
+  "theme_color": "#3176C6",
+  "categories": ["utilities", "productivity"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

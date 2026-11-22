@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="鱼者文游：本地优先的 AI 文字角色扮演。自建世界与 NPC，使用你自己的 DeepSeek API Key，白蓝小说阅读体验。">
+  <meta name="theme-color" content="#3176C6">
+  <meta name="format-detection" content="telephone=no">
+  <!-- viewport-fit=cover lets the app paint under the notch while Flutter's
+       SafeArea keeps controls out of it. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- iOS: standalone launch from the Home Screen, white status area. -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="鱼者">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-180.png">
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="icons/Icon-180.png">
+
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <title>鱼者文游</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #FFFFFF;
+      overflow: hidden;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+        "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    }
+    #fish-splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #FFFFFF;
+      z-index: 9999;
+      transition: opacity .25s ease;
+    }
+    #fish-splash img { width: 92px; height: 92px; border-radius: 22px; }
+    #fish-splash .name { color: #3176C6; font-size: 19px; letter-spacing: .12em; }
+    #fish-splash .hint { color: #858A93; font-size: 12px; }
+    #fish-splash.hidden { opacity: 0; pointer-events: none; }
+    #fish-legacy {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #f7f9fc;
+      color: #1f2937;
+      padding: max(22px, env(safe-area-inset-top)) 18px max(22px, env(safe-area-inset-bottom));
+      box-sizing: border-box;
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    #fish-legacy.show { display: block; }
+    #fish-legacy h1 { font-size: 21px; margin: 0 0 6px; color: #245a9a; }
+    #fish-legacy p { margin: 8px 0; }
+    #fish-legacy .legacy-card {
+      background: #fff; border: 1px solid #e5eaf2; border-radius: 12px;
+      padding: 14px; margin: 14px 0;
+    }
+    #fish-legacy .legacy-warn {
+      background: #fff8e8; border-color: #f0d39a; color: #7a4d00; font-size: 13px;
+    }
+    #fish-legacy .legacy-actions a {
+      display: inline-block; min-height: 42px; box-sizing: border-box;
+      padding: 9px 14px; margin: 4px 8px 4px 0;
+      border: 1px solid #c9d7e8; border-radius: 10px;
+      background: #fff; color: #245a9a; text-decoration: none;
+    }
+    #fish-legacy .legacy-primary { background: #3176c6 !important; color: #fff !important; border-color: #3176c6 !important; }
+    #fish-boot-error {
+      display: none;
+      max-width: 340px;
+      margin-top: 4px;
+      padding: 12px 14px;
+      border: 1px solid #f0c7c3;
+      border-radius: 12px;
+      background: #fff5f4;
+      color: #8c2f27;
+      font-size: 12px;
+      line-height: 1.6;
+      text-align: left;
+    }
+    #fish-splash.failed #fish-boot-error { display: block; }
+    #fish-boot-error textarea {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 6px;
+      min-height: 54px;
+      border: 1px solid #f0c7c3;
+      border-radius: 8px;
+      padding: 7px;
+      font: 11px/1.5 ui-monospace, monospace;
+      color: #5d2a25;
+      background: #fff;
+      resize: vertical;
+    }
+    .fish-boot-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .fish-boot-actions a, .fish-boot-actions button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid #e0b3ad;
+      background: #fff;
+      color: #8c2f27;
+      font-size: 12px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="fish-splash" aria-hidden="true">
+    <img id="fish-splash-icon" src="icons/Icon-192.png" alt="">
+    <div class="name">鱼者文游</div>
+    <div class="hint" id="fish-splash-hint">正在加载本地故事…</div>
+    <div id="fish-boot-error">
+      <strong>启动没有完成</strong>
+      <div id="fish-boot-error-text"></div>
+      <textarea id="fish-boot-detail" readonly aria-label="启动诊断详情"></textarea>
+      <div class="fish-boot-actions">
+        <button type="button" id="fish-boot-retry">重新加载</button>
+        <a href="diagnostics.html" target="_blank" rel="noopener">打开启动诊断</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="fish-legacy">
+    <h1>鱼者文游 · 兼容模式</h1>
+    <p>当前 iPhone / Safari 版本无法运行主程序需要的 Flutter Web 引擎。</p>
+    <div class="legacy-card legacy-warn">
+      <strong>你的存档不会被删除。</strong>
+      <p>这个页面不会清除网站数据。请不要在旧手机上删除 Safari 数据或卸载浏览器。</p>
+      <p id="fish-legacy-reason"></p>
+    </div>
+    <div class="legacy-card">
+      <strong>现在可以做什么</strong>
+      <p>1. 升级到较新的 iOS 后，用同一网址打开主程序。</p>
+      <p>2. 在旧手机上，用兼容阅读器查看已有的未加密 <code>.yuzhe</code> 备份。</p>
+      <p>3. 在 Android、电脑或较新的 iPhone 上继续文游。</p>
+      <div class="legacy-actions">
+        <a class="legacy-primary" href="legacy.html">打开只读备份阅读器</a>
+        <a href="diagnostics.html">打开启动诊断</a>
+      </div>
+    </div>
+    <div class="legacy-card">
+      <strong>最低环境</strong>
+      <p>主程序需要支持 WebGL、WebAssembly 和现代 JavaScript 的 Safari。
+      旧版 iOS 的系统 WebView 不提供这些能力，无法通过网页补丁修复。</p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var ua = navigator.userAgent || '';
+      var ios = ua.match(/(?:iPhone|iPad|iPod).*OS (\d+)[_.](\d+)/i);
+      var reason = '';
+      if (ios) {
+        var major = parseInt(ios[1], 10);
+        var minor = parseInt(ios[2], 10);
+        if (major < 13 || (major === 13 && minor < 4)) {
+          reason = '当前 iOS ' + major + '.' + minor + ' 低于主程序最低要求（约 iOS 13.4）。';
+        }
+      }
+      try {
+        if (!reason && (typeof WebAssembly === 'undefined' || typeof WebAssembly.Module !== 'function')) {
+          reason = '当前浏览器不支持 WebAssembly。';
+        }
+        if (!reason) {
+          var canvas = document.createElement('canvas');
+          var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+          if (!gl) reason = '当前浏览器没有可用的 WebGL。';
+        }
+        if (!reason && (typeof Promise !== 'function' || typeof fetch !== 'function')) {
+          reason = '当前浏览器缺少 Promise/fetch 等基础能力。';
+        }
+      } catch (error) {
+        reason = '兼容性检查失败：' + (error && error.message ? error.message : String(error));
+      }
+      if (!reason) return;
+      window.__fishLegacyReason = reason;
+      var splash = document.getElementById('fish-splash');
+      var legacy = document.getElementById('fish-legacy');
+      var reasonBox = document.getElementById('fish-legacy-reason');
+      if (splash) splash.style.display = 'none';
+      if (legacy) legacy.className = 'show';
+      if (reasonBox) reasonBox.textContent = reason;
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var splash = document.getElementById('fish-splash');
+      var hint = document.getElementById('fish-splash-hint');
+      var errorText = document.getElementById('fish-boot-error-text');
+      var detail = document.getElementById('fish-boot-detail');
+      var started = performance.now();
+      var stages = [];
+      var finished = false;
+
+      function safeStorageWrite(value) {
+        try {
+          sessionStorage.setItem('fish_boot_trace_v1', JSON.stringify(value));
+        } catch (_) {}
+      }
+
+      function record(name, note) {
+        var item = {
+          name: String(name || 'unknown').slice(0, 80),
+          atMs: Math.round(performance.now() - started),
+          note: String(note || '').slice(0, 300)
+        };
+        stages.push(item);
+        safeStorageWrite(stages.slice(-30));
+        try { console.log('[fish-boot]', item.name, item.atMs + 'ms', item.note); } catch (_) {}
+      }
+
+      function showError(name, note) {
+        if (finished) return;
+        record('error:' + name, note);
+        hint.textContent = '启动没有完成';
+        splash.classList.add('failed');
+        errorText.textContent =
+          '本地故事没有启动成功。你的存档没有被删除；请先不要清除网站数据。';
+        detail.value = stages.map(function (s) {
+          return s.atMs + 'ms  ' + s.name + (s.note ? '  ' + s.note : '');
+        }).join('\n');
+      }
+
+      function hide() {
+        if (finished) return;
+        finished = true;
+        record('first-frame');
+        splash.classList.add('hidden');
+        setTimeout(function () { splash.remove(); }, 300);
+      }
+      window.fishBoot = {
+        stage: record,
+        fail: showError,
+        stages: function () { return stages.slice(); }
+      };
+
+      // Cheap preflight so an error screenshot also identifies a missing
+      // deployment asset instead of only saying "unhandled rejection".
+      function preflight(path) {
+        fetch(path, { method: 'HEAD', cache: 'no-store' })
+          .then(function (response) {
+            var type = response.headers.get('content-type') || '';
+            record('asset:' + path, 'HTTP ' + response.status + ' ' + type);
+          })
+          .catch(function () {
+            record('asset:' + path, 'network-error');
+          });
+      }
+      ['main.dart.js', 'sqlite3.wasm', 'drift_worker.js', 'manifest.json', 'icons/Icon-192.png']
+        .forEach(preflight);
+
+      window.addEventListener('flutter-first-frame', hide);
+      window.addEventListener('error', function (event) {
+        // Do not persist arbitrary exception text: a widget/plugin error could
+        // contain user content. Diagnostics only needs the failure class.
+        if (event && event.message) record('window-error', '脚本错误（详情已省略）');
+      });
+      window.addEventListener('unhandledrejection', function (event) {
+        // A rejection can be a benign internal promise race during engine boot.
+        // Do not declare failure at 300ms; wait for the first frame or the 25s
+        // watchdog. Record only the error class, never its message/content.
+        var reason = event && event.reason;
+        var kind = reason && reason.name ? String(reason.name).slice(0, 40) : 'unknown';
+        record('unhandled-rejection', 'name=' + kind);
+        if (!finished) hint.textContent = '启动较慢，仍在加载…';
+      });
+
+      var splashIcon = document.getElementById('fish-splash-icon');
+      function fallbackIcon() {
+        if (!splashIcon || splashIcon.dataset.fallback) return;
+        splashIcon.dataset.fallback = '1';
+        splashIcon.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23eaf1fb'/%3E%3Cpath d='M18 54c15-22 37-22 53-2-15 22-37 22-53 2Z' fill='%233176c6'/%3E%3Ccircle cx='60' cy='48' r='3' fill='%23fff'/%3E%3Cpath d='M30 67c13 8 27 8 40 0' fill='none' stroke='%233176c6' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E";
+      }
+      splashIcon.addEventListener('error', fallbackIcon);
+      if (splashIcon.complete && splashIcon.naturalWidth === 0) fallbackIcon();
+
+      document.getElementById('fish-boot-retry').addEventListener('click', function () {
+        location.reload();
+      });
+
+      setTimeout(function () {
+        if (finished) return;
+        hint.textContent = '启动较慢，正在检查本地数据库…';
+        record('slow-8s');
+      }, 8000);
+      setTimeout(function () {
+        if (finished) return;
+        showError(
+          'timeout',
+          '60 秒内没有出现 Flutter 首帧；可能是脚本、WebAssembly、Worker 或数据库初始化失败。'
+        );
+      }, 60000);
+    })();
+  </script>
+
+  <script>
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      var reloadKey = 'fish_sw_controller_reload_v1';
+      // Only reload if this page was already controlled by an older worker.
+      // A fresh install must not reload in the middle of first-time DB setup.
+      var hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!hadController) return;
+        // A stale controller can serve an old main.dart.js while a new
+        // index.html is already live. Reload once so the new worker and the
+        // new assets are used together. The guard prevents reload loops.
+        try {
+          if (sessionStorage.getItem(reloadKey)) return;
+          sessionStorage.setItem(reloadKey, '1');
+        } catch (_) {}
+        location.reload();
+      });
+      navigator.serviceWorker
+        .register('service_worker.js', { scope: './' })
+        .then(function (registration) {
+          if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          return registration.update();
+        })
+        .catch(function (error) {
+          console.warn('Service worker registration failed:', error);
+        });
+    })();
+  </script>
+
+  <script>
+    (function () {
+      if (window.__fishLegacyReason) return;
+      var script = document.createElement('script');
+      script.src = 'flutter_bootstrap.js';
+      script.async = true;
+      script.onerror = function () {
+        if (window.fishBoot) window.fishBoot.fail('bootstrap', 'flutter_bootstrap.js 加载失败');
+      };
+      document.head.appendChild(script);
+    })();
+  </script>
+
+  <script>
+    // Basic offline cache. The registration itself happens before Flutter
+    // starts so an updated worker can take over a stale PWA promptly.
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+
+      // Flutter CanvasKit downloads Noto CJK subsets from fonts.gstatic.com
+      // for characters missing from the bundled font. Cache those too, or
+      // offline pages show tofu boxes for some Chinese characters.
+      function cacheable(url) {
+        return (
+          url.indexOf(location.origin) === 0 ||
+          url.indexOf('https://fonts.gstatic.com/') === 0 ||
+          url.indexOf('https://fonts.googleapis.com/') === 0
+        );
+      }
+
+      async function cacheUrls(urls) {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const worker = navigator.serviceWorker.controller || registration.active;
+          if (!worker || !urls.length) return;
+          worker.postMessage({ type: 'cache-urls', urls: urls.slice(0, 120) });
+        } catch (_) {
+          // Private browsing or no Cache API: the UI still recommends exports.
+        }
+      }
+
+      async function warmup() {
+        const urls = performance
+          .getEntriesByType('resource')
+          .map((entry) => entry.name)
+          .filter(cacheable);
+        await cacheUrls(urls.concat(location.href));
+      }
+
+      // Fonts can load lazily after the first frame; observe new resources.
+      if ('PerformanceObserver' in window) {
+        try {
+          new PerformanceObserver(function (list) {
+            const urls = list
+              .getEntries()
+              .map((entry) => entry.name)
+              .filter(cacheable);
+            if (urls.length) cacheUrls(urls);
+          }).observe({ type: 'resource', buffered: true });
+        } catch (_) {
+          // Older Safari: the timed warmups below still cover common cases.
+        }
+      }
+
+      window.addEventListener('flutter-first-frame', function () {
+        setTimeout(warmup, 1500);
+        setTimeout(warmup, 5000);
+        setTimeout(warmup, 12000);
+      }, { once: true });
+    })();
+  </script>
+</body>
+</html>

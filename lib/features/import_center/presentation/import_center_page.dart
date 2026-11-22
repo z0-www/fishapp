@@ -2,12 +2,15 @@ import '../../world_backup/presentation/backup_pages.dart';
 import '../../../shared/widgets/back_home_button.dart';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/content_frame.dart';
+import '../../world_creator/application/definition_intake.dart';
 import '../application/import_providers.dart';
+import '../application/web_import.dart';
 import '../domain/import_models.dart';
 
 class ImportCenterPage extends ConsumerStatefulWidget {
@@ -63,10 +66,36 @@ class _ImportCenterPageState extends ConsumerState<ImportCenterPage> {
   Future<void> pick() async {
     setState(() => busy = true);
     try {
+      if (kIsWeb) {
+        final id = await stageWebPickedFiles(ref);
+        if (id == null) return;
+        final job = await ref.read(pendingShareRepositoryProvider).get(id);
+        if (!mounted) return;
+        final backup =
+            job?.share.files.any((file) => isStoryBackupName(file.name)) ??
+            false;
+        final definition =
+            !backup && job != null && await isWorldDefinitionShare(job.share);
+        if (!mounted) return;
+        context.push(
+          backup
+              ? '/backup/restore/$id'
+              : definition
+              ? '/definition/import/$id'
+              : '/imports/preview/$id',
+        );
+        return;
+      }
       await ref.read(fileAccessProvider).pickFiles();
       if (mounted) ref.read(shareIntakeProvider).refresh();
-    } catch (_) {
-      if (mounted) setState(() => error = '无法读取文件，请在手机上重新选择较小文件。');
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => error = e is ImportFailure
+              ? e.message
+              : '无法读取文件，请${kIsWeb ? '重新选择' : '在手机上重新选择'}较小文件。',
+        );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -89,11 +118,19 @@ class _ImportCenterPageState extends ConsumerState<ImportCenterPage> {
               '在其他应用选择“分享 → 鱼者文游”，或粘贴文本、选择文件。先预览，确认后才保存；不会自动调用 AI。',
               style: TextStyle(height: 1.7),
             ),
+            if (kIsWeb)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  '网页版通过浏览器文件选择导入；Safari 不支持系统分享入口。.yuzhe 备份可选择“文件”中的归档。',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF858A93)),
+                ),
+              ),
             const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: busy ? null : pick,
               icon: const Icon(Icons.folder_open),
-              label: const Text('从手机选择文件'),
+              label: Text(kIsWeb ? '从本机选择文件' : '从手机选择文件'),
             ),
             const SizedBox(height: 20),
             TextField(
@@ -127,10 +164,11 @@ class _ImportCenterPageState extends ConsumerState<ImportCenterPage> {
             if (error != null) Text(error!),
             if (ref.watch(intakeIssueProvider) != null)
               Text(ref.watch(intakeIssueProvider)!),
-            TextButton(
-              onPressed: () => ref.read(shareIntakeProvider).refresh(),
-              child: const Text('检查系统分享暂存区'),
-            ),
+            if (!kIsWeb)
+              TextButton(
+                onPressed: () => ref.read(shareIntakeProvider).refresh(),
+                child: const Text('检查系统分享暂存区'),
+              ),
             const SizedBox(height: 24),
             Text('待处理', style: Theme.of(context).textTheme.titleMedium),
             ref

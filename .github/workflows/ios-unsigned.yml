@@ -1,0 +1,83 @@
+name: iOS unsigned IPA
+
+# Builds a real, unsigned iPhone application on GitHub's macOS runners.
+# The artifact is NOT installable until signed (Sideloadly, Xcode, or a paid
+# Apple Developer certificate). Signing and device installation are deliberately
+# not claimed by this workflow.
+#
+# Requires: a private GitHub repository owned by you (uploading source is your
+# decision) and macOS runner minutes. No secrets are needed for this workflow.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "ios-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-unsigned-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-unsigned-ipa:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      FLUTTER_SUPPRESS_ANALYTICS: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.50.0"
+          channel: stable
+          cache: true
+
+      - name: Show toolchain
+        run: |
+          flutter --version
+          xcodebuild -version
+          sw_vers
+          flutter config --enable-swift-package-manager
+          flutter config --list
+
+      - name: Validate Xcode project and plists
+        run: |
+          plutil -lint \
+            ios/Runner/Info.plist \
+            ios/ShareExtension/Info.plist \
+            ios/Runner/PrivacyInfo.xcprivacy \
+            ios/ShareExtension/PrivacyInfo.xcprivacy
+          xcodebuild -list -project ios/Runner.xcodeproj
+          python3 tool/ios/check_ios_project.py
+
+      - name: Precache iOS artifacts
+        run: flutter precache --ios
+
+      - name: Build unsigned IPA
+        run: bash tool/ios/build_unsigned_ipa.sh
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: fishtextadventure-ios-unsigned-${{ github.run_number }}
+          path: dist/ios/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fishtextadventure-ios-build-log-${{ github.run_number }}
+          path: |
+            build/ios/**/*.log
+            build/ios/**/*.xcresult
+          if-no-files-found: ignore
+          retention-days: 7

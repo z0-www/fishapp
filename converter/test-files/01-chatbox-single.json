@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "sessions": [
+    {
+      "id": "test-single",
+      "name": "雨夜茶馆 · 测试",
+      "model": "deepseek-chat",
+      "createdAt": "2026-01-02T03:04:05Z",
+      "messages": [
+        {
+          "id": "m1",
+          "role": "system",
+          "content": "你是一个叙述者。",
+          "timestamp": "2026-01-02T03:04:06Z"
+        },
+        {
+          "id": "m2",
+          "role": "user",
+          "content": "我推门进入茶馆。",
+          "timestamp": "2026-01-02T03:04:07Z"
+        },
+        {
+          "id": "m3",
+          "role": "assistant",
+          "content": "雨声很大。\n掌柜抬头。",
+          "timestamp": "2026-01-02T03:04:08Z"
+        },
+        {
+          "id": "m4",
+          "role": "user",
+          "content": "来杯茶。",
+          "timestamp": "2026-01-02T03:04:09Z"
+        },
+        {
+          "id": "m5",
+          "role": "assistant",
+          "content": "“稍等。”",
+          "timestamp": "2026-01-02T03:04:10Z"
+        }
+      ]
+    }
+  ]
+}

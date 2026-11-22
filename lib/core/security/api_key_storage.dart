@@ -1,9 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiKeyStorageException implements Exception {
   const ApiKeyStorageException();
   @override
-  String toString() => '安全存储暂时不可用，请解锁设备后重试；原密钥不会主动清除。';
+  String toString() => kIsWeb
+      // The web implementation needs WebCrypto, which browsers only expose in
+      // a secure context. Plain-HTTP origins cannot store the key at all.
+      ? '浏览器安全存储不可用：请使用 HTTPS（或 localhost）打开网页版，并允许本站点保存数据。原密钥不会被清除。'
+      : '安全存储暂时不可用，请解锁设备后重试；原密钥不会主动清除。';
 }
 
 /// The only module that may access credentials. No readAll/export/logging.
@@ -24,6 +29,13 @@ class ApiKeyStorage {
               accountName: 'com.yuzhe.fishtextadventure.api',
               accessibility: KeychainAccessibility.unlocked_this_device,
               synchronizable: false,
+            ),
+            // Web: AES-GCM encrypted value in localStorage. The wrapping key
+            // also lives in the same origin storage; this is browser-grade
+            // isolation, not a hardware keystore. Never use a public computer.
+            webOptions: WebOptions(
+              publicKey: 'fish_web_credentials_v1',
+              useSessionStorage: false,
             ),
           );
   static const _name = 'deepseek_api_key_v1';

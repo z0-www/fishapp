@@ -7,6 +7,7 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/database/app_database.dart';
+import '../../../platform/files/local_files.dart';
 import '../../../platform/share_intake/share_event_deduplicator.dart';
 import '../domain/import_models.dart';
 
@@ -28,6 +29,24 @@ class PendingShareRepository {
     }
     var total = 0;
     for (final file in share.files) {
+      if (LocalFiles.isMemoryRef(file.path)) {
+        // Browser selection: the bytes live in the session vault, so there is
+        // no path to traverse. Sizes still must match the declared metadata.
+        try {
+          final size = await LocalFiles.length(file.path);
+          total += size;
+          if (size > limits.fileBytes ||
+              total > limits.eventBytes ||
+              size != file.size) {
+            throw const ImportFailure('文件读取不完整或超过限制。');
+          }
+        } on ImportFailure {
+          rethrow;
+        } catch (_) {
+          throw const ImportFailure('文件已失效，请重新选择后再导入。');
+        }
+        continue;
+      }
       // Only random, native-owned event directories are valid file sources.
       if (!p.isAbsolute(file.path) ||
           p.basename(p.dirname(file.path)) != share.id ||

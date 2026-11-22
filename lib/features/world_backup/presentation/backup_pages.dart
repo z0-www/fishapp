@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../platform/files/local_files.dart';
+import '../../../platform/files/web_download.dart';
 import '../../../shared/widgets/content_frame.dart';
 import '../../import_center/application/import_providers.dart';
 import '../../worlds/application/world_providers.dart';
@@ -18,6 +21,7 @@ const _safeError = '无法处理归档，请检查文件、应用权限和剩余
 
 final _storyBackupProvider = FutureProvider((ref) async {
   final db = ref.watch(databaseProvider);
+  if (kIsWeb) return StoryBackup(db, Directory(''));
   final support = await getApplicationSupportDirectory();
   return StoryBackup(
     db,
@@ -139,36 +143,46 @@ class _ExportPageState extends ConsumerState<_ExportPage> {
     });
     Directory? session;
     try {
+      final repository = await ref.read(_storyBackupProvider.future);
+      if (kIsWeb) {
+        final bytes = await repository.exportBytes(
+          widget.worldId,
+          password: secret,
+        );
+        if (!mounted) return;
+        final details = await repository.inspectBytes(bytes, password: secret);
+        if (!mounted) return;
+        if (!await _confirmMissing(details)) return;
+        if (!mounted) return;
+        final saved = await saveBytesToUser(
+          suggestedName: '鱼者文游故事备份.yuzhe',
+          bytes: bytes,
+          mime: 'application/vnd.yuzhe.story',
+        );
+        if (mounted) {
+          setState(
+            () => message = saved
+                ? '已生成完整故事备份。如弹出系统分享面板，请选择“存储到文件”；否则请在浏览器下载列表确认。网页版附件原文件仅保留名称等元数据。'
+                : '已取消保存，或浏览器阻止了下载。请重试。',
+          );
+          if (saved) {
+            password.clear();
+            confirm.clear();
+          }
+        }
+        return;
+      }
       final root = await getTemporaryDirectory();
       final staging = Directory(p.join(root.path, 'yuzhe_export'));
       await staging.create(recursive: true);
       session = await staging.createTemp('backup-');
       final file = File(p.join(session.path, '鱼者文游故事备份.yuzhe'));
-      final repository = await ref.read(_storyBackupProvider.future);
       await repository.export(file, widget.worldId, password: secret);
       if (!mounted) return;
       final details = await repository.inspect(file, password: secret);
       if (!mounted) return;
-      if (details.missingFiles > 0) {
-        final proceed = await showDialog<bool>(
-          context: context,
-          builder: (dialog) => AlertDialog(
-            title: const Text('部分附件无法备份'),
-            content: Text('有 ${details.missingFiles} 个附件仅保留名称等元数据。要继续保存吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialog, false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialog, true),
-                child: const Text('继续保存'),
-              ),
-            ],
-          ),
-        );
-        if (proceed != true || !mounted) return;
-      }
+      if (!await _confirmMissing(details)) return;
+      if (!mounted) return;
       final saved = await _channel.invokeMethod<bool>('saveStoryBackup', {
         'path': file.path,
       });
@@ -193,6 +207,31 @@ class _ExportPageState extends ConsumerState<_ExportPage> {
       }
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<bool> _confirmMissing(BackupPreview details) async {
+    if (details.missingFiles <= 0) return true;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('部分附件无法备份'),
+        content: Text(
+          '有 ${details.missingFiles} 个附件仅保留名称等元数据。'
+          '${kIsWeb ? '网页版不保存附件原文件。' : ''}要继续保存吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('继续保存'),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
   }
 
   @override
@@ -230,6 +269,7 @@ class StoryBackupRestorePage extends ConsumerStatefulWidget {
 class _StoryBackupRestoreState extends ConsumerState<StoryBackupRestorePage> {
   final password = TextEditingController();
   File? file;
+  Uint8List? data;
   BackupPreview? preview;
   bool encrypted = false;
   bool busy = true;
@@ -258,11 +298,19 @@ class _StoryBackupRestoreState extends ConsumerState<StoryBackupRestorePage> {
       if (files == null || files.length != 1) {
         throw const BackupFailure('请每次选择一个 .yuzhe 完整故事备份。');
       }
-      final source = File(files.single.path);
-      final locked = await StoryBackupFormat.isEncrypted(source);
+      final attachment = files.single;
+      final locked = LocalFiles.isMemoryRef(attachment.path)
+          ? await StoryBackupFormat.isEncryptedBytes(
+              await LocalFiles.readBytes(attachment.path),
+            )
+          : await StoryBackupFormat.isEncrypted(File(attachment.path));
+      if (LocalFiles.isMemoryRef(attachment.path)) {
+        data = await LocalFiles.readBytes(attachment.path);
+      } else {
+        file = File(attachment.path);
+      }
       if (!mounted) return;
       setState(() {
-        file = source;
         encrypted = locked;
         busy = false;
       });
@@ -286,8 +334,10 @@ class _StoryBackupRestoreState extends ConsumerState<StoryBackupRestorePage> {
 
   Future<void> _run({required bool restore}) async {
     final source = file;
+    final bytes = data;
     final review = preview;
-    if (source == null || (restore && review == null)) return;
+    if (restore && review == null) return;
+    if (source == null && bytes == null) return;
     final secret = encrypted ? password.text : null;
     setState(() {
       busy = true;
@@ -296,7 +346,9 @@ class _StoryBackupRestoreState extends ConsumerState<StoryBackupRestorePage> {
     try {
       final repository = await ref.read(_storyBackupProvider.future);
       if (restore) {
-        final id = await repository.restore(source, review!, password: secret);
+        final id = bytes != null
+            ? await repository.restoreBytes(bytes, review!, password: secret)
+            : await repository.restore(source!, review!, password: secret);
         try {
           await ref
               .read(pendingShareRepositoryProvider)
@@ -311,7 +363,9 @@ class _StoryBackupRestoreState extends ConsumerState<StoryBackupRestorePage> {
         ref.invalidate(importHistoryProvider);
         context.go('/play/$id');
       } else {
-        final summary = await repository.inspect(source, password: secret);
+        final summary = bytes != null
+            ? await repository.inspectBytes(bytes, password: secret)
+            : await repository.inspect(source!, password: secret);
         if (mounted) setState(() => preview = summary);
       }
     } on BackupFailure catch (error) {

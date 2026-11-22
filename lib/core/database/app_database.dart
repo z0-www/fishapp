@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
-import 'package:drift_flutter/drift_flutter.dart';
+import 'web_database_stub.dart'
+    if (dart.library.js_interop) 'web_database_web.dart';
 part 'app_database.g.dart';
 
 @DataClassName('WorldRow')
@@ -197,7 +198,11 @@ class ContextSummaries extends Table {
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(driftDatabase(name: 'fish_text_adventure'));
+  /// Web builds use the bundled sqlite3 WebAssembly module and drift worker so
+  /// the same schema, migrations and SQL run as on Android/iOS. New web
+  /// databases use IndexedDB for Safari reliability; an existing OPFS database
+  /// is detected and kept instead of being replaced by an empty one.
+  AppDatabase() : super(openFishDatabase());
   AppDatabase.forTesting(super.executor);
   @override
   int get schemaVersion => 6;

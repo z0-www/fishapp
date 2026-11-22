@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import '../../features/import_center/domain/import_models.dart';
+import '../files/local_files.dart';
 
 class ShareEventDeduplicator {
   Future<String> fingerprint(
@@ -25,6 +26,8 @@ class ShareEventDeduplicator {
     for (final file in share.files) {
       final hash = file.sha256.isNotEmpty
           ? file.sha256
+          : LocalFiles.isMemoryRef(file.path)
+          ? sha256.convert(await LocalFiles.readBytes(file.path)).toString()
           : (await sha256.bind(File(file.path).openRead()).first).toString();
       hashes.add('${file.mime}:$hash');
     }

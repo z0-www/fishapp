@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 
+import '../../../platform/files/local_files.dart';
 import '../../import_center/domain/import_models.dart';
 
 Future<bool> isWorldDefinitionShare(IncomingShare share) async {
@@ -8,9 +8,10 @@ Future<bool> isWorldDefinitionShare(IncomingShare share) async {
     var text = share.text;
     if (text.isEmpty) {
       if (share.files.length != 1) return false;
-      final file = File(share.files.single.path);
-      if (await file.length() > 512 * 1024) return false;
-      text = await file.readAsString();
+      if (await LocalFiles.length(share.files.single.path) > 512 * 1024) {
+        return false;
+      }
+      text = await LocalFiles.readText(share.files.single.path);
     }
     if (utf8.encode(text).length > 512 * 1024) return false;
     final data = jsonDecode(text);

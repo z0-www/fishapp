@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#3176C6">
+  <title>鱼者文游 · 旧版兼容阅读器</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f7f9fc; color: #1f2937; }
+    body {
+      padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+      font: 15px/1.7 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    h1 { font-size: 21px; line-height: 1.35; margin: 0 0 4px; color: #245a9a; }
+    h2 { font-size: 17px; margin: 22px 0 8px; color: #245a9a; }
+    p { margin: 8px 0; }
+    .sub { color: #6b7280; font-size: 13px; }
+    .card { background: #fff; border: 1px solid #e5eaf2; border-radius: 12px; padding: 14px; margin: 14px 0; }
+    .warn { background: #fff8e8; border-color: #f0d39a; color: #7a4d00; font-size: 13px; }
+    .pick { display: block; margin: 14px 0; }
+    input[type=file] { width: 100%; box-sizing: border-box; padding: 12px; background: #fff; border: 1px solid #c9d7e8; border-radius: 10px; font: inherit; }
+    .world { border-top: 1px dashed #e5eaf2; padding-top: 10px; margin-top: 10px; }
+    .world:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+    .world-title { font-weight: 700; font-size: 16px; }
+    .msg { padding: 9px 0; border-bottom: 1px dashed #eef2f7; }
+    .role { display: inline-block; min-width: 48px; color: #3176c6; font-size: 12px; font-weight: 700; }
+    .no { color: #9aa3af; font-size: 11px; margin-left: 6px; }
+    .body { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 3px; }
+    .empty { color: #9aa3af; font-style: italic; }
+    .error { color: #b3261e; background: #fff5f4; border: 1px solid #f0c7c3; border-radius: 10px; padding: 10px; margin: 12px 0; }
+    .ok { color: #137a3a; }
+    .actions { margin: 14px 0; }
+    .actions a, .actions button {
+      display: inline-block; min-height: 40px; padding: 9px 13px; margin: 4px 6px 4px 0;
+      border: 1px solid #c9d7e8; border-radius: 10px; background: #fff; color: #245a9a;
+      font: inherit; text-decoration: none; cursor: pointer;
+    }
+    code { font: 12px ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <h1>鱼者文游 · 旧版兼容阅读器</h1>
+  <p class="sub">只读查看未加密的 <code>.yuzhe</code> 完整故事备份。不会上传文件，不会修改备份。</p>
+
+  <div class="card warn">
+    这是旧版 Safari 的降级页面：旧系统无法运行主程序的 Flutter/CanvasKit 引擎，
+    因此不能在这里创建世界或调用 AI。你的原有存档不会被删除。
+    请升级 iOS 后回到主程序；或在此查看已有 <code>.yuzhe</code> 备份。
+  </div>
+
+  <label class="pick">
+    <strong>选择 .yuzhe 文件</strong>
+    <input id="file" type="file" accept=".yuzhe,application/octet-stream">
+  </label>
+
+  <div id="status" class="sub">尚未选择文件。</div>
+  <div id="result"></div>
+
+  <div class="actions">
+    <a href="./">返回主程序</a>
+    <a href="legacy.html">重新载入阅读器</a>
+  </div>
+
+  <div class="card sub">
+    <strong>说明</strong>
+    <p>这里只解析主 App 的 YUZHE v1 未加密容器，展示世界标题和原始消息。
+    加密归档、附件原文件、AI 继续生成需要较新的主程序环境。</p>
+    <p>如果你的手机系统较新但仍看到此页，请确认 Safari/WebView 已更新，或打开
+    <code>diagnostics</code> 页面检查。</p>
+  </div>
+
+  <script>
+    (function () {
+      var input = document.getElementById('file');
+      var status = document.getElementById('status');
+      var result = document.getElementById('result');
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function decodeUtf8(bytes) {
+        if (typeof TextDecoder !== 'undefined') {
+          return new TextDecoder('utf-8').decode(bytes);
+        }
+        var binary = '';
+        for (var i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return decodeURIComponent(escape(binary));
+      }
+
+      function fail(message) {
+        status.textContent = '读取失败。';
+        result.innerHTML = '<div class="error">' + escapeHtml(message) + '</div>';
+      }
+
+      function readUint32(bytes, offset) {
+        return (((bytes[offset] << 24) >>> 0) +
+          (bytes[offset + 1] << 16) +
+          (bytes[offset + 2] << 8) +
+          bytes[offset + 3]) >>> 0;
+      }
+
+      function render(rows) {
+        var worlds = [];
+        var messages = [];
+        for (var i = 0; i < rows.length; i++) {
+          var row = rows[i];
+          if (!row || typeof row !== 'object') continue;
+          if (row.table === 'worlds' && row.row) worlds.push(row.row);
+          if (row.table === 'imported_messages' && row.row) messages.push(row.row);
+        }
+        messages.sort(function (a, b) {
+          return (Number(a.ordinal) || 0) - (Number(b.ordinal) || 0);
+        });
+        status.textContent = '已读取 ' + worlds.length + ' 个世界、' + messages.length + ' 条消息。';
+        status.className = 'ok';
+        var html = '';
+        if (!worlds.length) {
+          html += '<div class="error">归档没有世界标题。</div>';
+        }
+        for (var w = 0; w < worlds.length; w++) {
+          var world = worlds[w];
+          html += '<div class="world"><div class="world-title">' +
+            escapeHtml(world.title || '未命名世界') + '</div>' +
+            '<div class="sub">' + escapeHtml(world.summary || '') + '</div></div>';
+        }
+        html += '<h2>原始消息</h2>';
+        if (!messages.length) {
+          html += '<div class="sub">归档没有 imported_messages。</div>';
+        }
+        for (var m = 0; m < messages.length; m++) {
+          var message = messages[m];
+          var body = message.body == null ? '' : String(message.body);
+          html += '<div class="msg"><span class="role">' +
+            escapeHtml(message.role || 'unknown') + '</span>' +
+            '<span class="no">#' + (Number(message.ordinal) + 1) + '</span>' +
+            '<div class="body' + (body ? '' : ' empty') + '">' +
+            (body ? escapeHtml(body) : '（空正文）') + '</div></div>';
+        }
+        result.innerHTML = html;
+      }
+
+      function decodeArchive(buffer) {
+        var bytes = new Uint8Array(buffer);
+        if (bytes.length < 7) throw new Error('文件太短，不是完整归档。');
+        if (bytes[0] !== 0x59 || bytes[1] !== 0x55 || bytes[2] !== 0x5a ||
+            bytes[3] !== 0x48 || bytes[4] !== 0x45) {
+          throw new Error('这不是鱼者文游 .yuzhe 归档。');
+        }
+        if (bytes[5] !== 1) throw new Error('暂不支持这个归档容器版本。');
+        if (bytes[6] === 1) throw new Error('这是加密归档；旧版阅读器不支持解密，请在新版鱼者中打开。');
+        var position = 7;
+        var rows = [];
+        while (position < bytes.length) {
+          if (bytes.length - position < 4) throw new Error('归档记录不完整。');
+          var length = readUint32(bytes, position);
+          position += 4;
+          if (length < 2 || length > 8 * 1024 * 1024 || length > bytes.length - position) {
+            throw new Error('归档记录长度异常。');
+          }
+          var frame = decodeUtf8(bytes.subarray(position, position + length));
+          position += length;
+          var decoded = JSON.parse(frame);
+          if (decoded && typeof decoded === 'object' && decoded.end) break;
+          rows.push(decoded);
+        }
+        render(rows);
+      }
+
+      input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        status.className = 'sub';
+        status.textContent = '正在读取 ' + file.name + '…';
+        result.innerHTML = '';
+        var reader = new FileReader();
+        reader.onload = function () {
+          try { decodeArchive(reader.result); }
+          catch (error) { fail(error && error.message ? error.message : String(error)); }
+        };
+        reader.onerror = function () { fail('浏览器没有读完文件，请重试。'); };
+        reader.readAsArrayBuffer(file);
+      };
+    })();
+  </script>
+</body>
+</html>

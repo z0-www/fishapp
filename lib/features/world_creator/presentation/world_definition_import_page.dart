@@ -1,14 +1,15 @@
 import '../../../shared/widgets/back_home_button.dart';
 
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../platform/files/local_files.dart';
 import '../../../shared/widgets/content_frame.dart';
 import '../../import_center/application/import_providers.dart';
+import '../../import_center/application/web_import.dart';
 import '../../worlds/application/world_providers.dart';
 import '../application/providers.dart';
 import '../domain/world_definition.dart';
@@ -46,11 +47,11 @@ class _WorldDefinitionImportPageState
         if (job.share.files.length != 1) {
           throw const DefinitionFailure('请一次选择一个世界设定文件。');
         }
-        final file = File(job.share.files.single.path);
-        if (await file.length() > 512 * 1024) {
+        if (await LocalFiles.length(job.share.files.single.path) >
+            512 * 1024) {
           throw const DefinitionFailure('设定文件过大。');
         }
-        text = await file.readAsString();
+        text = await LocalFiles.readText(job.share.files.single.path);
       }
       final d = WorldDefinitionExchange.decode(text);
       if (mounted) setState(() => preview = d);
@@ -84,10 +85,21 @@ class _WorldDefinitionImportPageState
 
   Future<void> pick() async {
     try {
+      if (kIsWeb) {
+        final id = await stageWebPickedFiles(ref, multiple: false);
+        if (id != null && mounted) context.push('/definition/import/$id');
+        return;
+      }
       await ref.read(fileAccessProvider).pickFiles();
       if (mounted) ref.read(shareIntakeProvider).refresh();
-    } catch (_) {
-      if (mounted) setState(() => error = '请在手机上选择之前导出的设定文件。');
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => error = e is DefinitionFailure
+              ? e.message
+              : '请在${kIsWeb ? '本机' : '手机'}选择之前导出的设定文件。',
+        );
+      }
     }
   }
 
@@ -138,7 +150,7 @@ class _WorldDefinitionImportPageState
             ),
             OutlinedButton(
               onPressed: busy ? null : pick,
-              child: const Text('从手机选择设定文件'),
+              child: Text(kIsWeb ? '从本机选择设定文件' : '从手机选择设定文件'),
             ),
             if (preview != null) ...[
               const SizedBox(height: 20),

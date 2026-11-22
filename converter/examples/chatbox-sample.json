@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "sessions": [
+    {
+      "id": "s1",
+      "name": "雨夜测试",
+      "messages": [
+        { "role": "system", "content": "你是叙述者。" },
+        { "role": "user", "content": "我推门进入茶馆。" },
+        { "role": "assistant", "content": "雨声很大。\n掌柜抬头。" },
+        { "role": "user", "content": "来杯茶。" },
+        { "role": "assistant", "content": "“稍等。”" }
+      ]
+    }
+  ]
+}

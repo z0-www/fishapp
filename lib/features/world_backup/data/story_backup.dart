@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 
 import '../../../core/database/app_database.dart';
@@ -30,6 +31,11 @@ class StoryBackup {
   StoryBackup(this.db, this.attachmentsDirectory);
   final AppDatabase db;
   final Directory attachmentsDirectory;
+
+  /// Browser builds have no filesystem for attachment originals. The archive
+  /// still carries complete story rows; attachment binaries are reported as
+  /// metadata-only instead of being silently invented.
+  bool get storesAttachments => !kIsWeb;
   static const _attachmentLimit = 16 * 1024 * 1024;
   static const _chunkLimit = 128 * 1024;
   static const _tables = <String, String>{
@@ -103,13 +109,75 @@ class StoryBackup {
   }) async {
     final prefix = 'restore-${_newId()}';
     final dir = Directory(p.join(attachmentsDirectory.path, prefix));
+    return _restore(
+      source: source,
+      bytes: null,
+      review: review,
+      prefix: prefix,
+      dir: dir,
+      password: password,
+    );
+  }
+
+  /// Browser: build the archive in memory for a download.
+  Future<Uint8List> exportBytes(String worldId, {String? password}) async {
+    return db.transaction(
+      () => StoryBackupFormat.encodeBytes(_snapshot(worldId), password: password),
+    );
+  }
+
+  Future<BackupPreview> inspectBytes(
+    Uint8List bytes, {
+    String? password,
+  }) async {
+    final decoded = _BackupScan();
+    final fingerprint = await StoryBackupFormat.decodeBytes(
+      bytes,
+      decoded.read,
+      password: password,
+    );
+    decoded.finish();
+    return BackupPreview(
+      fingerprint,
+      List.unmodifiable(decoded.titles),
+      Map.unmodifiable(decoded.counts),
+      decoded.missingFiles,
+    );
+  }
+
+  Future<String> restoreBytes(
+    Uint8List bytes,
+    BackupPreview review, {
+    String? password,
+  }) => _restore(
+    source: null,
+    bytes: bytes,
+    review: review,
+    prefix: 'restore-${_newId()}',
+    dir: Directory(''),
+    password: password,
+  );
+
+  Future<String> _restore({
+    required File? source,
+    required Uint8List? bytes,
+    required BackupPreview review,
+    required String prefix,
+    required Directory dir,
+    String? password,
+  }) async {
+    final materialize = storesAttachments;
     final session = _BackupScan(
-      onChunk: (id, bytes) async {
-        await dir.create(recursive: true);
-        await File(p.join(dir.path, id))
-            .writeAsBytes(bytes, mode: FileMode.append);
-      },
-      onRow: (table, row) => _insert(table, row, prefix, dir),
+      onChunk: materialize
+          ? (id, chunk) async {
+              await dir.create(recursive: true);
+              await File(
+                p.join(dir.path, id),
+              ).writeAsBytes(chunk, mode: FileMode.append);
+            }
+          : null,
+      onRow: (table, row) =>
+          _insert(table, row, prefix, dir, materialize: materialize),
     );
     final marker = 'backup-import-${review.fingerprint}';
     try {
@@ -120,11 +188,17 @@ class StoryBackup {
             null) {
           throw const BackupFailure('这份归档已经导入。');
         }
-        final fingerprint = await StoryBackupFormat.read(
-          source,
-          session.read,
-          password: password,
-        );
+        final fingerprint = source != null
+            ? await StoryBackupFormat.read(
+                source,
+                session.read,
+                password: password,
+              )
+            : await StoryBackupFormat.decodeBytes(
+                bytes!,
+                session.read,
+                password: password,
+              );
         session.finish();
         if (fingerprint != review.fingerprint) {
           throw const BackupFailure('文件已在预览后变化，请重新预览。');
@@ -142,7 +216,7 @@ class StoryBackup {
         return _linked(prefix, session.primary!);
       });
     } catch (_) {
-      if (await dir.exists()) {
+      if (materialize && await dir.exists()) {
         try {
           await dir.delete(recursive: true);
         } on FileSystemException {
@@ -262,6 +336,7 @@ class StoryBackup {
   }
 
   Future<_Attachment?> _localAttachment(Map<String, Object?> row) async {
+    if (!storesAttachments) return null;
     final location = row['private_path'] as String;
     final length = row['byte_size'] as int;
     if (length < 0 || length > _attachmentLimit || location.isEmpty) {
@@ -352,8 +427,9 @@ class StoryBackup {
     String table,
     Map<String, Object?> row,
     String prefix,
-    Directory dir,
-  ) async {
+    Directory dir, {
+    bool materialize = true,
+  }) async {
     final columns = _columns(table);
     for (final key in [
       'world_id',
@@ -365,7 +441,14 @@ class StoryBackup {
     ]) {
       if (row[key] case final String value) row[key] = _linked(prefix, value);
     }
-    if (row['id'] case final String id) row['id'] = _linked(prefix, id);
+    if (row['id'] case final String id) {
+      // EventTimeline orders rows by revision then id. A plain hash destroys
+      // the source order, so imported timeline rows keep a sortable ordinal
+      // prefix while remaining unique per restore.
+      row['id'] = table == 'timeline_entries'
+          ? _timelineId(prefix, id, row['payload'])
+          : _linked(prefix, id);
+    }
     if (table == 'pending_imports') {
       row['fingerprint'] = row['id'];
       row['payload'] = jsonEncode({
@@ -381,8 +464,10 @@ class StoryBackup {
     }
     if (table == 'imported_attachments') {
       final id = row['private_path'] as String;
-      row['private_path'] = id.isEmpty ? '' : p.join(dir.path, id);
-      if (id.isNotEmpty && row['byte_size'] == 0) {
+      row['private_path'] = id.isEmpty || !materialize
+          ? ''
+          : p.join(dir.path, id);
+      if (materialize && id.isNotEmpty && row['byte_size'] == 0) {
         await File(row['private_path'] as String).create(recursive: true);
       }
     }
@@ -474,6 +559,31 @@ class StoryBackup {
   static String _slots(int count) => List.filled(count, '?').join(', ');
   static String _linked(String prefix, String original) =>
       '$prefix-${sha256.convert(utf8.encode(original))}';
+
+  static String _timelineId(String prefix, String original, Object? payload) {
+    Object? ordinal;
+    try {
+      if (payload is String) {
+        final decoded = jsonDecode(payload);
+        if (decoded is Map) ordinal = decoded['sourceOrdinal'];
+      }
+    } catch (_) {
+      // Keep the old deterministic hash path for malformed legacy rows.
+    }
+    final numeric = ordinal is num
+        ? ordinal.toInt()
+        : int.tryParse(ordinal?.toString() ?? '');
+    final order = numeric == null
+        ? 'x'
+        : numeric.isNegative
+        ? 'n${(-numeric).toString().padLeft(8, '0')}'
+        : numeric.toString().padLeft(8, '0');
+    final digest = sha256
+        .convert(utf8.encode(original))
+        .toString()
+        .substring(0, 16);
+    return '$prefix-t$order-$digest';
+  }
   static String _newId() {
     final random = Random.secure();
     return List.generate(

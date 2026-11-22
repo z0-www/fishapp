@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../features/import_center/domain/import_models.dart';
@@ -10,13 +11,20 @@ class ShareIntakeService {
   final MethodChannel _channel;
   final _events = StreamController<void>.broadcast();
   Stream<void> get events => _events.stream;
+
+  /// Browsers have no system share inbox. The coordinator still drains the
+  /// durable local queue, so this returns an empty list instead of failing.
+  bool get supported => !kIsWeb;
+
   void start() {
+    if (!supported) return;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'changed') _events.add(null);
     });
   }
 
   Future<List<IncomingShare>> pending() async {
+    if (!supported) return const [];
     try {
       final rows = await _channel.invokeListMethod<dynamic>('pending') ?? [];
       return rows
@@ -32,6 +40,7 @@ class ShareIntakeService {
   }
 
   Future<void> acknowledge(String id, {bool keepFiles = true}) async {
+    if (!supported) return;
     try {
       await _channel.invokeMethod<void>('ack', {
         'id': id,
@@ -46,7 +55,7 @@ class ShareIntakeService {
 
   void refresh() => _events.add(null);
   Future<void> dispose() async {
-    _channel.setMethodCallHandler(null);
+    if (supported) _channel.setMethodCallHandler(null);
     await _events.close();
   }
 }

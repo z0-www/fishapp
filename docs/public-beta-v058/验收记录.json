@@ -1,0 +1,23 @@
+{
+  "status": "BLOCKED",
+  "apkSha256": "F381CD8EB4B1C98DE7A01A8AF44AEFD3B5402BF6D9759AF3501D4546AB79FB86",
+  "certificateSha256": "261619CF1EA80929DB0A0D76516E706BF5EA7F6D406169F7BC5C094FBF0C38F4",
+  "byokReviewReference": null,
+  "mainlandReviewReference": null,
+  "backupRestoreReference": "reports/public-beta-v058/pb34-install-and-restore.log",
+  "androidByokValidation": {
+    "version": "0.5.8+33",
+    "package": "com.yuzhe.fishtextadventure.byokvalidation",
+    "apkSha256": "9059759C87C1EF6F8B9F097A4BDA99D67B876C16EBBBE48FC277CDCADD410F3B",
+    "userConfirmed": true
+  },
+  "androidLiveApi": {
+    "evidenceReference": null,
+    "apkSha256": null,
+    "httpStatus": null,
+    "model": null,
+    "realReplyConfirmed": false,
+    "inputTokens": null,
+    "outputTokens": null
+  }
+}

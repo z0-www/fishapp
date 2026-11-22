@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>SSE transport self-test</title>
+  <style>
+    body { font: 14px/1.6 monospace; padding: 16px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<script>
+  // Deterministic browser-level network stub. The production Dart transport
+  // still performs real fetch parsing, stream reading and cancellation.
+  const calls = [];
+  window.__calls = calls;
+  let index = 0;
+
+  const encoder = new TextEncoder();
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function streamOf(chunks, { failAfter = false, abortSignal = null } = {}) {
+    return new ReadableStream({
+      async start(controller) {
+        if (abortSignal) {
+          abortSignal.addEventListener('abort', () => {
+            try { controller.error(new DOMException('Aborted', 'AbortError')); } catch (_) {}
+          });
+        }
+        for (const chunk of chunks) {
+          await delay(8);
+          try { controller.enqueue(encoder.encode(chunk)); } catch (_) { return; }
+        }
+        if (failAfter) {
+          controller.error(new Error('network lost'));
+          return;
+        }
+        try { controller.close(); } catch (_) {}
+      },
+    });
+  }
+
+  const sse = (content, extra = {}) =>
+    'data: ' + JSON.stringify({ choices: [{ delta: { content } }], ...extra }) + '\n\n';
+
+  const successChunks = [
+    sse('你'),
+    sse('好'),
+    'data: ' + JSON.stringify({
+      choices: [{ delta: {}, finish_reason: 'stop' }],
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 4,
+        prompt_cache_hit_tokens: 6,
+        prompt_cache_miss_tokens: 4,
+        total_tokens: 14,
+      },
+    }) + '\n\n',
+    'data: [DONE]\n\n',
+  ];
+
+  const eofChunks = [
+    sse('半'),
+    'data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\n',
+  ];
+
+  window.fetch = async (url, init = {}) => {
+    const current = index++;
+    const auth =
+      init.headers && typeof init.headers.get === 'function'
+        ? init.headers.get('authorization')
+        : null;
+    calls.push({
+      url: String(url),
+      body: init.body || null,
+      auth,
+      index: current,
+    });
+
+    if (current === 0) {
+      return new Response(streamOf(successChunks), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }
+    if (current === 1) {
+      return new Response(streamOf([sse('半')], { failAfter: true }), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }
+    if (current === 2) {
+      return new Response(streamOf(eofChunks), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }
+    if (current === 3) {
+      return new Response(
+        JSON.stringify({ error: { message: 'Authentication Fails' } }),
+        { status: 401, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    return new Response(streamOf(successChunks, { abortSignal: init.signal }), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+</script>
+<script src="sse_selftest.js"></script>
+</body>
+</html>

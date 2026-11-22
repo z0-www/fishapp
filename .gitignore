@@ -54,7 +54,38 @@ app.*.map.json
 *.jks
 *.p12
 *.pfx
+*.p8
+*.mobileprovision
+*.ipa
+*.xcarchive
+AuthKey_*.p8
 key.properties
 reports/
 /dist/
+
+# iOS build artefacts / local signing material
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/flutter_assets/
+ios/Flutter/ephemeral/
+**/xcuserdata/
+*.xcuserstate
+
+
+
+# Offline converter build output
+/converter/build/
+/converter/.dart_tool/
+
+
+# Independent converter release signing material (never commit)
+/converter/signing/
+/converter/android/local.properties
+/converter/android/.gradle/
+/converter/android/.kotlin/
+/converter/android/build/
+/converter/android/app/build/
 

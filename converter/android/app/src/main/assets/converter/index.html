@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#3176C6">
+  <meta name="description" content="鱼者文游离线对话转换器：把 Chatbox / DeepSeek 等导出的对话转换成本地 .yuzhe 故事归档。全部在设备本地完成。">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="鱼者转换器">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>鱼者文游 · 离线对话转换器</title>
+</head>
+<body>
+  <div class="offline-state" id="offlineState" hidden></div>
+
+  <div class="modal" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="guideTitle" hidden>
+    <div class="modal-card">
+      <div class="modal-kicker">手机端使用说明</div>
+      <h2 id="guideTitle">三步，把 Chatbox 对话带回鱼者</h2>
+      <ol class="guide-steps">
+        <li><strong>选择文件</strong><span>从手机“文件”或下载目录选择 Chatbox 导出的 JSON、Markdown 或 ZIP。</span></li>
+        <li><strong>勾选会话并导出</strong><span>预览后点“生成 .yuzhe”，再点“保存 / 分享文件”；iPhone 选择“存储到文件”。</span></li>
+        <li><strong>在鱼者文游恢复</strong><span>打开鱼者文游 → <b>完整故事备份</b> → <b>从 .yuzhe 备份恢复</b>。</span></li>
+      </ol>
+      <div class="guide-warning">
+        <strong>不要选错入口</strong>
+        <span>请勿使用「DeepSeek 对话导入」。那个入口用于 DeepSeek 文本/分享链接，不读取 <code>.yuzhe</code> 备份。</span>
+      </div>
+      <div class="guide-meta">文件只在你的手机浏览器内处理，不会上传聊天内容。</div>
+      <button class="primary" id="guideDone" type="button">我知道了，开始使用</button>
+      <button class="text-button" id="guideClose" type="button">先关闭</button>
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <img src="icon-192.png" alt="" class="logo">
+      <div>
+        <p class="eyebrow">FishTextAdventure Converter</p>
+        <h1>鱼者文游 · 离线对话转换器</h1>
+        <p class="sub">手机直接转换 Chatbox 对话为鱼者文游可恢复的 <code>.yuzhe</code> 故事归档。</p>
+      </div>
+    </div>
+    <div class="badges">
+      <span>本地处理</span><span>不上传</span><span>无需 Key</span><span>可离线</span>
+    </div>
+    <div class="hero-actions">
+      <button class="guide-link" id="showGuide" type="button">手机使用说明</button>
+      <span class="hero-note">Android Chrome / iPhone Safari</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel" id="step-file">
+      <div class="step-head"><span class="step-no">1</span><h2>选择原始文件</h2></div>
+      <label class="drop" id="drop" for="file">
+        <input id="file" type="file" accept=".json,.md,.markdown,.txt,.zip,application/json,text/plain,text/markdown,application/zip,application/x-zip-compressed,application/octet-stream">
+        <span class="drop-icon">＋</span>
+        <strong>点这里从手机选择文件</strong>
+        <small>支持 Chatbox JSON / Markdown / 备份 ZIP / 普通 TXT；按内容识别，不看扩展名。也可以把文件拖到这里。</small>
+      </label>
+      <p class="file-info" id="fileInfo" hidden></p>
+      <div class="error" id="error" hidden></div>
+    </section>
+
+    <section class="panel" id="step-preview" hidden>
+      <div class="step-head"><span class="step-no">2</span><h2>预览并选择要转换的会话</h2></div>
+      <div class="summary" id="summary"></div>
+      <div class="sessions" id="sessions"></div>
+      <div class="preview-box" id="preview"></div>
+    </section>
+
+    <section class="panel" id="step-export" hidden>
+      <div class="step-head"><span class="step-no">3</span><h2>导出 .yuzhe</h2></div>
+      <div class="export-info" id="exportInfo"></div>
+      <div class="actions">
+        <button class="primary" id="exportOne" type="button">生成 .yuzhe</button>
+        <button class="secondary" id="exportBundle" type="button" hidden>合并为一个 .yuzhe</button>
+        <button class="secondary" id="exportZip" type="button" hidden>生成多会话 ZIP</button>
+      </div>
+      <div class="result" id="resultPanel" hidden>
+        <div class="result-head">
+          <span class="result-icon">✓</span>
+          <div>
+            <strong id="resultTitle">已生成</strong>
+            <p id="resultMeta"></p>
+          </div>
+        </div>
+        <button class="primary save-button" id="saveResult" type="button">保存 / 分享文件</button>
+        <button class="secondary open-button" id="openYuzhe" type="button" hidden>打开鱼者文游</button>
+        <p class="save-hint" id="saveHint"></p>
+      </div>
+      <div class="status" id="exportStatus" hidden></div>
+    </section>
+
+    <section class="note">
+      <h3>手机端转换规则</h3>
+      <ul>
+        <li>保留消息正文、顺序、角色（user / assistant / system / tool）和原始换行、Markdown 文本。</li>
+        <li>Chatbox 对话通常没有鱼者世界设定。转换器只生成最小合法世界，<strong>不编造 NPC、地点、规则、记忆或剧情</strong>；生成字段会在归档中标记。</li>
+        <li>图片、附件、工具调用参数不会写入归档；预览会列出数量，不会静默丢失。</li>
+        <li>不修改原始文件；解析失败时不会生成半成品归档。</li>
+        <li>导出的 <code>.yuzhe</code> 默认不加密，包含原始对话文本，请像聊天记录一样保管。</li>
+        <li>所有处理都在手机浏览器内存中完成，没有网络请求、没有账号、没有 API Key、没有统计。</li>
+        <li><strong>导入入口：</strong>鱼者文游 → 完整故事备份 → 从 .yuzhe 备份恢复；不是「DeepSeek 对话导入」。</li>
+      </ul>
+    </section>
+
+    <footer>鱼者文游 · 离线对话转换器 V1.2.1 · 全部本地处理 · 无远程脚本/统计代码</footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

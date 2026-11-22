@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
 
+import '../../../platform/files/local_files.dart';
 import '../domain/import_models.dart';
 
 class ConversationNormalizer {
@@ -239,7 +239,22 @@ class DeepSeekArchiveParser {
     bool catalogOnly = false,
     String? selectedSession,
   }) async {
-    if (await File(file.path).length() > 64 * 1024 * 1024) {
+    if (LocalFiles.isMemoryRef(file.path)) {
+      final bytes = await LocalFiles.readBytes(file.path);
+      if (bytes.length > 64 * 1024 * 1024) {
+        throw const ImportFailure('ZIP 超过64MB。');
+      }
+      cancel.check();
+      // No isolate in the browser; the ZIP is already fully in memory.
+      return _parse(
+        InputMemoryStream(bytes),
+        cancel,
+        source: file,
+        catalogOnly: catalogOnly,
+        selectedSession: selectedSession,
+      );
+    }
+    if (await LocalFiles.length(file.path) > 64 * 1024 * 1024) {
       throw const ImportFailure('ZIP 超过64MB。');
     }
     cancel.check();

@@ -1,0 +1,11 @@
+name: yuzhe_codec
+description: Pure-Dart .yuzhe archive codec shared by the app and the offline converter.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.14.0
+
+dependencies:
+  crypto: 3.0.8
+  cryptography: ^2.9.0

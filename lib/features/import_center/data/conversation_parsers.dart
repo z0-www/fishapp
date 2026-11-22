@@ -1,12 +1,12 @@
 import 'share_link.dart';
 
 import 'dart:convert';
-import 'dart:io';
-
-import 'story_parsers.dart';
-import 'deepseek_share_import_service.dart';
 
 import 'package:html/parser.dart' as html;
+
+import '../../../platform/files/local_files.dart';
+import 'story_parsers.dart';
+import 'deepseek_share_import_service.dart';
 
 import '../domain/import_models.dart';
 
@@ -98,10 +98,10 @@ class JsonConversationParser implements ConversationParser {
     cancel.check();
     try {
       if (text.isEmpty && files.length == 1) {
-        if (await File(files.single.path).length() > 16 * 1024 * 1024) {
+        if (await LocalFiles.length(files.single.path) > 16 * 1024 * 1024) {
           throw const ImportFailure('JSON 文件过大。');
         }
-        text = await File(files.single.path).readAsString();
+        text = await LocalFiles.readText(files.single.path);
       }
       final data = jsonDecode(text);
       if (data is Map &&
@@ -157,13 +157,7 @@ class ImageAttachmentParser extends JsonConversationParser {
     final checked = <ImportedAttachment>[];
     for (final file in files) {
       cancel.check();
-      final handle = await File(file.path).open();
-      late List<int> header;
-      try {
-        header = await handle.read(16);
-      } finally {
-        await handle.close();
-      }
+      final header = await LocalFiles.readHead(file.path, 16);
       final png =
           header.length >= 8 &&
           header.take(8).join(',') == '137,80,78,71,13,10,26,10';
@@ -324,7 +318,7 @@ class ImportParserRegistry {
     for (final entry in share.files.indexed) {
       cancel.check();
       final file = entry.$2;
-      final size = await File(file.path).length();
+      final size = await LocalFiles.length(file.path);
       total += size;
       if (size > limits.fileBytes || total > limits.eventBytes) {
         throw const ImportFailure('文件超过导入限制。');
@@ -348,7 +342,7 @@ class ImportParserRegistry {
       var text = '';
       if (parser is PlainTextParser) {
         if (size > limits.textBytes) throw const ImportFailure('文本文件过大，请分批导入。');
-        text = await File(file.path).readAsString();
+        text = await LocalFiles.readText(file.path);
       }
       await add(await parser.parse(text, [file], cancel));
       progress((entry.$1 + 1) / (share.files.length + 1));

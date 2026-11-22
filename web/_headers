@@ -1,0 +1,27 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Never let Safari/PWA keep an old bootstrap or worker through HTTP cache.
+/index.html
+  Cache-Control: no-cache
+
+/service_worker.js
+  Cache-Control: no-cache
+
+/diagnostics.html
+  Cache-Control: no-cache
+
+/drift_worker.js
+  Content-Type: application/javascript
+
+# Explicit WASM MIME for hosts whose default mapping is incomplete.
+/sqlite3.wasm
+  Content-Type: application/wasm
+/canvaskit/canvaskit.wasm
+  Content-Type: application/wasm
+/canvaskit/chromium/canvaskit.wasm
+  Content-Type: application/wasm

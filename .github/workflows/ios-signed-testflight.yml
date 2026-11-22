@@ -1,0 +1,137 @@
+name: iOS signed IPA (TestFlight / ad hoc) — template
+
+# TEMPLATE: this workflow is provided for the future TestFlight distribution
+# step. It has NOT been executed (no macOS runner, Apple Developer account,
+# certificates or App Store Connect key were available). Treat the first run as
+# integration work, not as a proven release pipeline.
+#
+# Required repository secrets:
+#   IOS_TEAM_ID                     Apple Developer Team ID (10 chars)
+#   APPSTORE_KEY_ID                 App Store Connect API key id
+#   APPSTORE_ISSUER_ID              App Store Connect issuer id
+#   APPSTORE_KEY_P8                 base64 of the AuthKey_*.p8 file
+#
+# The team must already own the bundle identifiers:
+#   com.yuzhe.fishtextadventure
+#   com.yuzhe.fishtextadventure.ShareExtension
+# with the App Groups capability (group.com.yuzhe.fishtextadventure) enabled.
+
+on:
+  workflow_dispatch:
+    inputs:
+      export_method:
+        description: "Xcode export method"
+        type: choice
+        default: app-store-connect
+        options:
+          - app-store-connect
+          - release-testing
+          - ad-hoc
+          - development
+
+permissions:
+  contents: read
+
+jobs:
+  build-signed-ipa:
+    name: Archive and export signed IPA
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.50.0"
+          channel: stable
+          cache: true
+
+      - name: Require signing secrets
+        env:
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+        run: |
+          for name in TEAM_ID KEY_ID ISSUER_ID KEY_P8; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing secret for $name; signed builds need an Apple Developer account." >&2
+              exit 1
+            fi
+          done
+
+      - name: Install App Store Connect API key
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+        run: |
+          mkdir -p "$HOME/private_keys"
+          echo "$KEY_P8" | base64 --decode > "$HOME/private_keys/AuthKey_${KEY_ID}.p8"
+          chmod 600 "$HOME/private_keys/AuthKey_${KEY_ID}.p8"
+
+      - name: Flutter dependencies and defines
+        run: |
+          flutter config --enable-swift-package-manager
+          flutter pub get
+          # DART_DEFINES is persisted into ios/Flutter/Generated.xcconfig and is
+          # reused by the Xcode archive build phase.
+          flutter build ios --config-only --release \
+            --dart-define=FISH_IOS_BYOK=true
+
+      - name: Archive
+        env:
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          xcodebuild archive \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath build/ios/Runner.xcarchive \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${KEY_ID}.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Export IPA
+        env:
+          METHOD: ${{ inputs.export_method }}
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          cat > build/ios/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>${METHOD}</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath build/ios/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist build/ios/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${KEY_ID}.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Upload signed IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: fishtextadventure-ios-signed
+          path: build/ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      # Uploading to TestFlight is intentionally left to the operator:
+      #   xcrun altool --upload-app -f <ipa> -t ios --apiKey ... --apiIssuer ...
+      # A successful upload is not the same as a passed TestFlight review or a
+      # successful install on a physical device.

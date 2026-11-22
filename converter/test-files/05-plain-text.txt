@@ -1,0 +1,6 @@
+User: 你好，这是普通 TXT 测试。
+Assistant: 你好，旅人。
+
+User: 请保留换行。
+Assistant: 第一行。
+第二行。

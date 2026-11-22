@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "sessions": [
+    {
+      "id": "s-a",
+      "name": "海边来信",
+      "model": "deepseek-chat",
+      "createdAt": "2026-02-01T10:00:00Z",
+      "messages": [
+        {
+          "role": "user",
+          "content": "我沿着海岸走。"
+        },
+        {
+          "role": "assistant",
+          "content": "潮水退去，沙上有一封信。\n信纸被盐打湿。"
+        },
+        {
+          "role": "user",
+          "content": "我打开它。"
+        },
+        {
+          "role": "assistant",
+          "content": "里面只有一句话：\n“回家吧。”"
+        }
+      ]
+    },
+    {
+      "id": "s-b",
+      "name": "夜班列车",
+      "model": "deepseek-reasoner",
+      "createdAt": "2026-02-02T22:00:00Z",
+      "messages": [
+        {
+          "role": "system",
+          "content": "保持冷峻的叙述。"
+        },
+        {
+          "role": "user",
+          "content": "车厢里只剩我一个人。"
+        },
+        {
+          "role": "assistant",
+          "content": "灯闪了三次。\n门没有开。"
+        }
+      ]
+    },
+    {
+      "id": "s-c",
+      "name": "没有标题的会话",
+      "messages": [
+        {
+          "role": "user",
+          "content": "只有一句话。"
+        },
+        {
+          "role": "assistant",
+          "content": "收到。"
+        }
+      ]
+    }
+  ]
+}

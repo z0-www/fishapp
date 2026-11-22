@@ -1,0 +1,16 @@
+# FishTextAdventure offline converter. No analytics, no third-party scripts.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cache-Control: public, max-age=0, must-revalidate
+
+/service_worker.js
+  Cache-Control: no-cache
+
+/manifest.json
+  Content-Type: application/manifest+json
+
+/offline.html
+  Cache-Control: public, max-age=0, must-revalidate
